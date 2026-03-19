@@ -3,7 +3,8 @@ import {
     FolderOpen, Plus,
     Play, X,
     Search, Shield,
-    Archive, Scissors, FileText, UploadCloud, CheckCircle, Check, Image as ImageIcon
+    Archive, Scissors, FileText, UploadCloud, CheckCircle, Check, Image as ImageIcon,
+    MoreVertical, Edit3, Trash2
 } from 'lucide-react';
 import { formatRelativeTime, createDefaultCounter } from '../utils/helpers';
 
@@ -14,6 +15,8 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
 
     // --- 新增專案狀態 ---
     const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
+    const [editingProjectId, setEditingProjectId] = useState(null);
+    const [activeProjectMenuId, setActiveProjectMenuId] = useState(null);
     const [newProjectForm, setNewProjectForm] = useState({
         name: '',
         method: '棒針', // 預設
@@ -42,6 +45,7 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
     const closeAddProjectModal = () => {
         setIsAddProjectOpen(false);
         // reset form
+        setEditingProjectId(null);
         setNewProjectForm({ name: '', method: '棒針', mode: '自由模式', yarns: [], tools: [] });
         setParsedPatternData(null);
         setIsParsingPdf(false);
@@ -65,24 +69,56 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
     const handleSaveProject = () => {
         if (!newProjectForm.name.trim()) return;
 
-        const newProject = {
-            id: Date.now(),
-            name: newProjectForm.name.trim(),
-            method: newProjectForm.method,
-            mode: newProjectForm.mode,
-            status: '進行中',
-            progress: 0,
-            timeSpent: 0,
-            lastEdited: Date.now(),
-            yarns: newProjectForm.yarns,
-            tools: newProjectForm.tools,
-            counterA: createDefaultCounter('宏觀 / 段數', 1),
-            counterB: createDefaultCounter('微觀 / 針數', 1),
-            patternData: parsedPatternData // 如果有解析的織圖資料
-        };
+        if (editingProjectId) {
+            setProjects(prev => prev.map(p => p.id === editingProjectId ? {
+                ...p,
+                name: newProjectForm.name.trim(),
+                method: newProjectForm.method,
+                mode: newProjectForm.mode,
+                yarns: newProjectForm.yarns,
+                tools: newProjectForm.tools,
+                patternData: parsedPatternData || p.patternData,
+                lastEdited: Date.now()
+            } : p));
+        } else {
+            const newProject = {
+                id: Date.now(),
+                name: newProjectForm.name.trim(),
+                method: newProjectForm.method,
+                mode: newProjectForm.mode,
+                status: '進行中',
+                progress: 0,
+                timeSpent: 0,
+                lastEdited: Date.now(),
+                yarns: newProjectForm.yarns,
+                tools: newProjectForm.tools,
+                counterA: createDefaultCounter('宏觀 / 段數', 1),
+                counterB: createDefaultCounter('微觀 / 針數', 1),
+                patternData: parsedPatternData // 如果有解析的織圖資料
+            };
+            setProjects(prev => [newProject, ...prev]);
+        }
 
-        setProjects(prev => [newProject, ...prev]);
         closeAddProjectModal();
+    };
+
+    const handleDeleteProject = (id) => {
+        if (!window.confirm('確定要刪除此專案嗎？此操作無法復原。')) return;
+        setProjects(prev => prev.filter(p => p.id !== id));
+        setActiveProjectMenuId(null);
+    };
+
+    const handleEditProject = (project) => {
+        setEditingProjectId(project.id);
+        setNewProjectForm({
+            name: project.name,
+            method: project.method || '棒針',
+            mode: project.mode || '自由模式',
+            yarns: project.yarns || [],
+            tools: project.tools || []
+        });
+        setActiveProjectMenuId(null);
+        setIsAddProjectOpen(true);
     };
 
     // --- 渲染新增專案 Modal ---
@@ -110,7 +146,7 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
               
               {/* --- 頂部標題列 --- */}
               <div className="flex justify-between items-center p-8 pb-4 border-b border-stone-100 shrink-0">
-                <h3 className="text-lg font-black text-stone-800 tracking-tight uppercase italic">Add Project ✨</h3>
+                <h3 className="text-lg font-black text-stone-800 tracking-tight uppercase italic">{editingProjectId ? 'Edit Project ✨' : 'Add Project ✨'}</h3>
                 <button onClick={closeAddProjectModal} className="text-stone-400 hover:text-stone-600 bg-stone-100 p-2.5 rounded-full transition-colors active:scale-95">
                   <X size={20}/>
                 </button>
@@ -258,7 +294,7 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
                   disabled={!newProjectForm.name.trim()} 
                   className={`flex-[2] py-4 rounded-full font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all ${!newProjectForm.name.trim() ? 'bg-stone-300 text-stone-100 shadow-none cursor-not-allowed' : 'bg-[#44403c] text-white shadow-stone-800/20 hover:bg-stone-900'}`}
                 >
-                  建立專案
+                  {editingProjectId ? '儲存變更' : '建立專案'}
                 </button>
               </div>
             </div>
@@ -267,7 +303,7 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
       };
 
     return (
-        <div className="p-6 pb-28 min-h-full flex flex-col relative">
+        <div className="p-6 pb-28 min-h-full flex flex-col relative" onClick={() => setActiveProjectMenuId(null)}>
             <div className="flex justify-between items-center min-h-[40px] mt-2 mb-4">
                 {isProjectSearchExpanded ? (
                     <div className="flex-1 flex items-center bg-white border border-stone-200 rounded-full px-4 py-1.5 shadow-sm animate-fade-in ring-2 ring-amber-100/50">
@@ -294,14 +330,30 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
                     const cA = p.counterA || { name: '段數', value: p.rows || 0 };
                     const cB = p.counterB || { name: '針數', value: p.stitches || 0 };
                     return (
-                        <div key={p.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-stone-200 mb-5 relative group">
+                        <div key={p.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-stone-200 mb-5 relative group" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1 pr-4">
-                                    <h3 className="font-black text-lg text-stone-800 leading-tight mb-1">{p.name}</h3>
+                                    <div className="flex justify-between items-start">
+                                        <h3 className="font-black text-lg text-stone-800 leading-tight mb-1 pr-2">{p.name}</h3>
+                                        <div className="relative shrink-0">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setActiveProjectMenuId(activeProjectMenuId === p.id ? null : p.id); }} 
+                                                className="p-1 -mt-1 -mr-1 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-full transition-colors"
+                                            >
+                                                <MoreVertical size={18} />
+                                            </button>
+                                            {activeProjectMenuId === p.id && (
+                                                <div className="absolute right-0 top-8 bg-white rounded-2xl shadow-xl border border-stone-100 py-2 w-32 z-50 animate-fade-in flex flex-col overflow-hidden">
+                                                    <button onClick={() => handleEditProject(p)} className="px-4 py-3 text-sm font-bold text-stone-700 hover:bg-stone-50 text-left flex items-center gap-2"><Edit3 size={16} className="text-stone-400"/> 編輯專案</button>
+                                                    <button onClick={() => handleDeleteProject(p.id)} className="px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 text-left flex items-center gap-2 border-t border-stone-100"><Trash2 size={16} className="text-red-400"/> 刪除專案</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                     <span className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Edited {formatRelativeTime(p.lastEdited)}</span>
                                 </div>
                                 {p.status !== '已完成' && (
-                                    <button onClick={() => setActiveWorkspaceId(p.id)} className="p-4 bg-stone-800 text-white rounded-full shadow-lg active:scale-90 transition-all group-hover:bg-[#926c44]"><Play size={20} fill="currentColor" /></button>
+                                    <button onClick={() => setActiveWorkspaceId(p.id)} className="p-4 bg-stone-800 text-white rounded-full shadow-lg active:scale-90 transition-all group-hover:bg-[#926c44] shrink-0 ml-2"><Play size={20} fill="currentColor" /></button>
                                 )}
                             </div>
 
