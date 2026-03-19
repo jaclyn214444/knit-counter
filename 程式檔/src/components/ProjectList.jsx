@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     FolderOpen, Plus,
     Play, X,
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime, createDefaultCounter } from '../utils/helpers';
 
-export default function ProjectList({ projects, setProjects, inventory = [], setActiveWorkspaceId }) {
+export default function ProjectList({ projects, setProjects, inventory = [], setActiveWorkspaceId, setIsAnyModalOpen }) {
     const [projectSearchQuery, setProjectSearchQuery] = useState('');
     const [isProjectSearchExpanded, setIsProjectSearchExpanded] = useState(false);
     const [isTrustBannerExpanded, setIsTrustBannerExpanded] = useState(false);
@@ -25,6 +25,12 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
     // PDF 解析相關狀態
     const [isParsingPdf, setIsParsingPdf] = useState(false);
     const [parsedPatternData, setParsedPatternData] = useState(null);
+
+    useEffect(() => {
+        if (setIsAnyModalOpen) {
+            setIsAnyModalOpen(isAddProjectOpen);
+        }
+    }, [isAddProjectOpen, setIsAnyModalOpen]);
 
     const filteredProjects = useMemo(() => {
         const search = projectSearchQuery.toLowerCase();
@@ -312,12 +318,14 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
             )}
 
             {/* 新增專案 Floating Action Button */}
-            <button 
-                onClick={() => setIsAddProjectOpen(true)}
-                className="fixed bottom-24 right-6 p-4 bg-[#926c44] text-white rounded-full shadow-xl shadow-amber-900/20 hover:bg-amber-800 active:scale-90 transition-transform z-40"
-            >
-                <Plus size={28} strokeWidth={2.5} />
-            </button>
+            <div className="absolute bottom-20 right-6 z-40 flex flex-col items-end gap-4 pointer-events-auto">
+                <button 
+                    onClick={() => setIsAddProjectOpen(true)}
+                    className="w-16 h-16 bg-[#926c44] text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 active:scale-90 hover:bg-amber-800 shadow-amber-900/20"
+                >
+                    <Plus size={32} strokeWidth={3} />
+                </button>
+            </div>
 
             {renderAddProjectModal()}
         </div>

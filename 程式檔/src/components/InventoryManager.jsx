@@ -8,7 +8,7 @@ import {
     RotateCcw, Minus, FileText, Scissors, Shield, ScanFace, UploadCloud,
     ChevronRight, AlignLeft, BookOpen, MapPin, Lock, Edit3
 } from 'lucide-react';
-export default function InventoryManager({ inventory, setInventory, projects }) {
+export default function InventoryManager({ inventory, setInventory, projects, setIsAnyModalOpen }) {
     const [inventoryType, setInventoryType] = useState('yarn');
     const [baseFilter, setBaseFilter] = useState('owned');
     const [inventorySearchQuery, setInventorySearchQuery] = useState('');
@@ -35,6 +35,12 @@ export default function InventoryManager({ inventory, setInventory, projects }) 
     const getWipProjectsForItem = useCallback((itemId, type) => {
         return projects.filter(p => p.status !== '已完成' && (type === 'yarn' ? (p.yarns && p.yarns.includes(itemId)) : (p.tools && p.tools.includes(itemId))));
     }, [projects]);
+
+    useEffect(() => {
+        if (setIsAnyModalOpen) {
+            setIsAnyModalOpen(isFilterOpen || isAddInventoryOpen || !!selectedInventoryItem || isQRModalOpen);
+        }
+    }, [isFilterOpen, isAddInventoryOpen, selectedInventoryItem, isQRModalOpen, setIsAnyModalOpen]);
 
     const filteredInventory = useMemo(() => {
         let result = inventory.filter(item => {

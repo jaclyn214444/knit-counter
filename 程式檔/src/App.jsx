@@ -21,6 +21,7 @@ export default function App() {
 
     const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
     const isWorkspaceMode = activeWorkspaceId !== null;
+    const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
 
     return (
         <div className="min-h-screen bg-stone-100 flex justify-center font-sans selection:bg-amber-200 selection:text-amber-900">
@@ -36,12 +37,12 @@ export default function App() {
         `}} />
 
                 <main className="flex-1 overflow-y-auto relative z-10 no-scrollbar">
-                    {activeTab === 'projects' && !isWorkspaceMode && <ProjectList projects={projects} setProjects={setProjects} inventory={inventory} setActiveWorkspaceId={setActiveWorkspaceId} />}
-                    {activeTab === 'inventory' && !isWorkspaceMode && <InventoryManager inventory={inventory} setInventory={setInventory} projects={projects} />}
+                    {activeTab === 'projects' && !isWorkspaceMode && <ProjectList projects={projects} setProjects={setProjects} inventory={inventory} setActiveWorkspaceId={setActiveWorkspaceId} setIsAnyModalOpen={setIsAnyModalOpen} />}
+                    {activeTab === 'inventory' && !isWorkspaceMode && <InventoryManager inventory={inventory} setInventory={setInventory} projects={projects} setIsAnyModalOpen={setIsAnyModalOpen} />}
                     {activeTab === 'stats' && !isWorkspaceMode && <div className="p-6 text-center text-stone-400 mt-20"><BarChart2 size={48} className="mx-auto mb-4" />統計開發中</div>}
                 </main>
 
-                <nav className={`absolute bottom-0 w-full bg-white/90 backdrop-blur-lg border-t border-stone-200 shadow-2xl z-50 transition-transform duration-500 ${isWorkspaceMode ? 'translate-y-full' : 'translate-y-0'}`}>
+                <nav className={`absolute bottom-0 w-full bg-white/90 backdrop-blur-lg border-t border-stone-200 shadow-2xl z-50 transition-transform duration-500 ${(isWorkspaceMode || isAnyModalOpen) ? 'translate-y-full' : 'translate-y-0'}`}>
                     <ul className="flex justify-around items-center h-16">
                         {['projects', 'inventory', 'stats'].map((tab) => {
                             const icons = { projects: FolderOpen, inventory: Archive, stats: BarChart2 };

@@ -21,7 +21,6 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
     const [wakeLockRef, setWakeLockRef] = useState(null);
     const [isWorkspaceSettingsOpen, setIsWorkspaceSettingsOpen] = useState(false);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [resetConfirmTarget, setResetConfirmTarget] = useState(null);
     const [isAnimatingTarget, setIsAnimatingTarget] = useState(null);
 
@@ -62,7 +61,6 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
     const stageIdx = currentProject.currentStageIndex || 0;
     const currentStage = hasPattern ? stages[stageIdx] : null;
     const currentNote = currentProject.stageNotes?.[stageIdx] || '';
-    const logs = currentProject.history || [];
 
     const targetA = (hasPattern && currentStage) ? currentStage.rows : cA.target;
     const targetB = (hasPattern && currentStage) ? currentStage.stitches : cB.target;
@@ -113,10 +111,6 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
 
                     if (currentCounter.linkAction !== 0) {
                         updatedProj[otherKey].value = Math.max(0, updatedProj[otherKey].value + currentCounter.linkAction);
-                        const linkedCounterName = updatedProj[otherKey].name.split(' / ')[1] || updatedProj[otherKey].name;
-                        updatedProj.history = [{
-                            id: Date.now() + Math.random(), time: Date.now(), counterName: linkedCounterName, action: '連動', diff: currentCounter.linkAction, value: updatedProj[otherKey].value
-                        }, ...(updatedProj.history || [])].slice(0, 100);
                     }
 
                     if (hasPattern && counterKey === 'counterA' && currentCounter.autoAdvance) {
@@ -138,11 +132,6 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
                     }
                 }
 
-                const counterName = currentCounter.name.split(' / ')[1] || currentCounter.name;
-                updatedProj.history = [{
-                    id: Date.now() + Math.random(), time: Date.now(), counterName: counterName, action: increment > 0 ? '增加' : '減少', diff: increment, value: newValue
-                }, ...(updatedProj.history || [])].slice(0, 100);
-
                 return updatedProj;
             }
             return proj;
@@ -155,8 +144,7 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
                 const counterName = p[counterKey].name.split(' / ')[1] || p[counterKey].name;
                 return {
                     ...p,
-                    [counterKey]: { ...p[counterKey], value: 0 },
-                    history: [{ id: Date.now() + Math.random(), time: Date.now(), counterName, action: '歸零', diff: -p[counterKey].value, value: 0 }, ...(p.history || [])].slice(0, 100)
+                    [counterKey]: { ...p[counterKey], value: 0 }
                 };
             }
             return p;
@@ -210,7 +198,6 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
                 <div className="flex gap-2 items-center shrink-0">
                     <button onClick={() => setWorkspaceTheme(isDark ? 'light' : 'dark')} className={`p-2 rounded-full transition-colors active:scale-95 ${isDark ? 'bg-white/5 text-amber-400 hover:text-amber-300' : 'bg-stone-200/50 text-amber-500 hover:text-amber-600'}`}>{isDark ? <Moon size={14} /> : <Sun size={14} />}</button>
                     <button onClick={() => setIsWorkspaceSettingsOpen(true)} className={`p-2 rounded-full transition-colors relative active:scale-95 ${isDark ? 'bg-white/5 hover:text-white' : 'bg-stone-200/50 hover:text-stone-800'}`}><Settings size={14} />{(cA.linkAction !== 0 || cB.linkAction !== 0) && <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-amber-500 border border-transparent" />}</button>
-                    <button onClick={() => setIsHistoryOpen(true)} className={`p-2 rounded-full transition-colors active:scale-95 ${isDark ? 'bg-white/5 text-amber-400 hover:text-amber-300' : 'bg-stone-200/50 text-amber-500 hover:text-amber-600'}`}><History size={14} /></button>
                     <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full font-mono text-[10px] font-black transition-all ${isTimerRunning ? 'bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-inner' : (isDark ? 'bg-white/5 text-stone-400 border border-transparent' : 'bg-stone-200/50 text-stone-500 border border-transparent')}`}>{isTimerRunning ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}{formatTime(currentProject.timeSpent)}</button>
                 </div>
             </div>
@@ -304,36 +291,6 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
                                     <div><h4 className={`text-sm font-black mb-1 flex items-center gap-2 ${isDark ? 'text-emerald-500' : 'text-emerald-700'}`}><CheckCircle size={16} /> 自動跳段</h4><p className={`text-[10px] font-bold leading-relaxed ${isDark ? 'text-emerald-500/70' : 'text-emerald-600/80'}`}>當段數達標時，自動跳轉至下一階段。</p></div>
                                     <button disabled={!canLinkA} onClick={() => setProjects(prev => prev.map(p => p.id === projectId ? { ...p, counterA: { ...p.counterA, autoAdvance: !p.counterA.autoAdvance } } : p))} className={`w-12 h-7 rounded-full relative transition-colors shrink-0 shadow-inner ${!canLinkA ? 'opacity-30 cursor-not-allowed' : ''} ${cA.autoAdvance ? 'bg-emerald-500' : (isDark ? 'bg-white/10' : 'bg-stone-200')}`}><div className={`absolute top-1 w-5 h-5 rounded-full ${cA.autoAdvance ? 'bg-white' : (isDark ? 'bg-stone-400' : 'bg-white')} transition-transform shadow-sm ${cA.autoAdvance ? 'right-1' : 'left-1'}`} /></button>
                                 </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 歷史紀錄 Modal */}
-            {isHistoryOpen && (
-                <div className="absolute inset-0 z-[80] bg-black/60 backdrop-blur-sm flex flex-col justify-end transition-all pointer-events-auto animate-fade-in" onClick={() => setIsHistoryOpen(false)}>
-                    <div className={`w-full h-[75vh] max-w-md mx-auto rounded-t-[2.5rem] border-t p-6 pb-12 shadow-2xl flex flex-col animate-slide-up ${isDark ? 'bg-stone-900 border-white/10' : 'bg-[#faf8f6] border-stone-200'}`} onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-6 shrink-0">
-                            <h3 className={`text-xl font-black tracking-tight flex items-center gap-2 ${isDark ? 'text-white' : 'text-stone-800'}`}><History size={22} className="text-[#926c44]" /> 操作紀錄</h3>
-                            <button onClick={() => setIsHistoryOpen(false)} className={`p-2.5 rounded-full transition-colors active:scale-95 ${isDark ? 'bg-white/5 text-stone-400 hover:text-white' : 'bg-stone-200/50 text-stone-500 hover:text-stone-800'}`}><X size={20} /></button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto no-scrollbar space-y-3">
-                            {logs.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-stone-400 opacity-50"><History size={48} className="mb-4" /><p className="text-sm font-bold">尚無任何操作紀錄</p></div>
-                            ) : (
-                                logs.map((log) => (
-                                    <div key={log.id} className={`p-4 rounded-2xl border flex items-center justify-between ${isDark ? 'bg-black/30 border-white/5' : 'bg-white border-stone-100 shadow-sm'}`}>
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${isDark ? 'bg-white/10 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>{log.counterName}</span>
-                                                <span className={`text-xs font-bold ${log.action === '歸零' ? 'text-red-500' : (log.action === '連動' ? 'text-purple-500' : (log.action === '增加' ? 'text-emerald-500' : 'text-amber-500'))}`}>{log.action} {log.diff > 0 ? `+${log.diff}` : log.diff}</span>
-                                            </div>
-                                            <span className={`text-[10px] font-bold ${isDark ? 'text-stone-500' : 'text-stone-400'}`}>{new Date(log.time).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                                        </div>
-                                        <div className={`text-xl font-mono font-black ${isDark ? 'text-white' : 'text-stone-700'}`}>{log.value}</div>
-                                    </div>
-                                ))
                             )}
                         </div>
                     </div>
