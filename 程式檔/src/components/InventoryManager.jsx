@@ -12,6 +12,8 @@ import {
     YARN_HUES, YARN_DYE_STYLES, YARN_WEIGHTS,
     TOOL_SCHEMA, TOOL_JOINT_SIZES, TOOL_MATERIALS
 } from '../utils/constants';
+import { QRCodeSVG } from 'qrcode.react';
+import { toPng } from 'html-to-image';
 
 export default function InventoryManager({ inventory, setInventory, projects, setIsAnyModalOpen }) {
     const [inventoryType, setInventoryType] = useState('yarn');
@@ -29,13 +31,15 @@ export default function InventoryManager({ inventory, setInventory, projects, se
     const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
     const [isFabMenuOpen, setIsFabMenuOpen] = useState(false);
     const [isDetailMenuOpen, setIsDetailMenuOpen] = useState(false);
+    const qrRef = useRef(null);
 
     const [newInventoryForm, setNewInventoryForm] = useState({
         type: 'yarn', name: '', amount: '', originalAmount: '', totalLength: '', lowStockThreshold: '', status: 'idle', boundProjectId: '',
         weight: '3 Light', hue: '白色/米色', dyeStyle: '單色 (Solid)', colorCode: '',
         toolCategory: '針具類', toolType: '棒針', toolSubtype: '固定式輪針',
-        material: '未指定', jointSize: '未指定', length: '未指定', brand: '未指定',
-        needleSizeValue: '', needleSizeUnit: 'mm', image: ''
+        material: '未指定', jointSize: '未指定', length: '未指定', brand: '',
+        needleSizeValue: '', needleSizeUnit: 'mm', image: '',
+        fiberContent: '', suggestedNeedles: '', gauge: '', purchaseSource: '店家', price: '', currency: 'TWD', tags: [], colorName: ''
     });
 
     const getWipProjectsForItem = useCallback((itemId, type) => {
@@ -115,6 +119,25 @@ export default function InventoryManager({ inventory, setInventory, projects, se
         setEditingInventoryId(item.id);
         setNewInventoryForm({ ...item, status: 'idle', isWishlist: false });
         setIsAddInventoryOpen(true);
+    };
+
+    const handleDownloadQR = async () => {
+        if (!qrRef.current || !selectedInventoryItem) return;
+        setIsDownloadingQR(true);
+        try {
+            const dataUrl = await toPng(qrRef.current, { cacheBust: true, pixelRatio: 3, backgroundColor: '#ffffff' });
+            const link = document.createElement('a');
+            link.download = `${selectedInventoryItem.name}_標籤.png`;
+            link.href = dataUrl;
+            link.click();
+        } catch (err) {
+            console.error('QR下載失敗:', err);
+        } finally {
+            setTimeout(() => {
+                setIsDownloadingQR(false);
+                setIsQRModalOpen(false);
+            }, 800);
+        }
     };
 
     const handleDeleteInventory = (id) => {
@@ -235,15 +258,45 @@ export default function InventoryManager({ inventory, setInventory, projects, se
 
         {/* 庫存列表 (空間釋放後更寬廣) */}
         <div className="grid grid-cols-2 gap-4 mt-2">
-          {filteredInventory.length === 0 ? (
-            <div className="col-span-2 flex flex-col items-center justify-center py-24 text-stone-400 space-y-6">
-              <div className="p-8 bg-stone-100 rounded-full border border-stone-200"><Archive size={64} strokeWidth={1} /></div>
-              <div className="text-center space-y-2">
-                <p className="font-bold text-stone-500">找不到符合條件的項目</p>
-                <button onClick={() => { setEditingInventoryId(null); setNewInventoryForm({...newInventoryForm, type: inventoryType, name: inventorySearchQuery, status: 'wishlist'}); setIsAddInventoryOpen(true); }} className="mt-4 px-6 py-3 bg-orange-50 text-orange-600 rounded-full text-xs font-black uppercase tracking-widest border border-orange-100 flex items-center gap-2 hover:bg-orange-100 transition-all shadow-sm active:scale-95"><Plus size={14} strokeWidth={3} /> 將此搜尋加入待買清單</button>
+          {filteredInventory.length === 0 ? (() => {
+            const hasYarnFilters = yarnFilters.hues.length > 0 || yarnFilters.styles.length > 0 || yarnFilters.weights.length > 0 || yarnFilters.lengthRange !== 'all' || yarnFilters.status !== 'all';
+            const hasToolFilters = toolFilters.mainCategory !== '全部' || toolFilters.types.length > 0 || toolFilters.jointSizes.length > 0 || toolFilters.materials.length > 0 || toolFilters.statuses.length > 0;
+            const hasActiveFilters = inventorySearchQuery.trim() !== '' || (inventoryType === 'yarn' ? hasYarnFilters : hasToolFilters);
+
+            return (
+              <div className="col-span-2 flex flex-col items-center justify-center py-24 text-stone-400 space-y-6">
+                <div className="p-8 bg-stone-100 rounded-full border border-stone-200"><Archive size={64} strokeWidth={1} /></div>
+                <div className="text-center space-y-2 flex flex-col items-center">
+                  {hasActiveFilters ? (
+                    <>
+                      <p className="font-bold text-stone-500">找不到符合條件的項目</p>
+                      <button onClick={() => { 
+                        setEditingInventoryId(null); 
+                        let form = {...newInventoryForm, type: inventoryType, name: inventorySearchQuery, status: 'wishlist'};
+                        if (inventoryType === 'yarn') {
+                          if (yarnFilters.hues.length > 0) form.hue = yarnFilters.hues[0];
+                          if (yarnFilters.styles.length > 0) form.dyeStyle = yarnFilters.styles[0];
+                          if (yarnFilters.weights.length > 0) form.weight = yarnFilters.weights[0];
+                        } else {
+                          if (toolFilters.mainCategory !== '全部') {
+                            if (toolFilters.mainCategory === '配件') form.toolCategory = '配件類';
+                            else { form.toolCategory = '針具類'; form.toolType = toolFilters.mainCategory; }
+                          }
+                          if (toolFilters.types.length > 0) form.toolSubtype = toolFilters.types[0];
+                          if (toolFilters.jointSizes.length > 0) form.jointSize = toolFilters.jointSizes[0];
+                          if (toolFilters.materials.length > 0) form.material = toolFilters.materials[0];
+                        }
+                        setNewInventoryForm(form);
+                        setIsAddInventoryOpen(true); 
+                      }} className="mt-4 px-6 py-3 bg-orange-50 text-orange-600 rounded-full text-xs font-black uppercase tracking-widest border border-orange-100 flex items-center justify-center gap-2 hover:bg-orange-100 transition-all shadow-sm active:scale-95"><Plus size={14} strokeWidth={3} /> 是該花點錢錢買道具囉!</button>
+                    </>
+                  ) : (
+                    <p className="font-bold text-stone-500">是該花點錢錢買道具囉!</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
+            );
+          })() : (
             filteredInventory.map(item => {
               const isLowStock = item.type === 'yarn' && !item.isWishlist && item.lowStockThreshold > 0 && item.amount <= item.lowStockThreshold;
               const isWip = getWipProjectsForItem(item.id, item.type).length > 0;
@@ -376,77 +429,342 @@ export default function InventoryManager({ inventory, setInventory, projects, se
     const isYarn = newInventoryForm.type === 'yarn';
     const activeProjects = projects.filter(p => p.status !== '已完成');
 
+    const handleCategoryChange = (cat) => {
+        const types = Object.keys(TOOL_SCHEMA[cat] || {});
+        const firstType = types[0] || '';
+        const firstSubtype = (TOOL_SCHEMA[cat][firstType] || [])[0] || '';
+        setNewInventoryForm({ ...newInventoryForm, toolCategory: cat, toolType: firstType, toolSubtype: firstSubtype });
+    };
+
+    const handleTypeSubtypeChange = (val) => {
+        const [t, s] = val.split('_');
+        setNewInventoryForm({ ...newInventoryForm, toolType: t, toolSubtype: s });
+    };
+
+    const isCable = newInventoryForm.toolType === '輪針連接線' || newInventoryForm.toolSubtype?.includes('連接線');
+
     return (
       <div className="fixed inset-0 z-[120] flex flex-col justify-end bg-stone-900/60 backdrop-blur-md p-0 md:p-6 transition-opacity pointer-events-auto">
-        <div className="bg-white w-full max-w-md mx-auto rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl animate-slide-up flex flex-col max-h-[90vh]">
-          <div className="flex justify-between items-center p-8 pb-4 border-b border-stone-100 shrink-0"><h3 className="text-lg font-black text-stone-800 tracking-tight uppercase italic">{editingInventoryId ? 'Edit' : 'Add'} {isYarn ? 'Yarn' : 'Tool'} {newInventoryForm.status === 'wishlist' ? 'Wish' : ''}</h3><button onClick={() => { setIsAddInventoryOpen(false); setEditingInventoryId(null); setIsEnteringImageUrl(false); }} className="text-stone-400 hover:text-stone-600 bg-stone-100 p-2.5 rounded-full transition-colors"><X size={20}/></button></div>
-          <div className="p-8 pt-4 overflow-y-auto space-y-5 pb-12 no-scrollbar">
+        <div className="bg-white w-full max-w-md mx-auto rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl animate-slide-up flex flex-col max-h-[90vh] relative">
+          
+          {/* 1. Header (Sticky) */}
+          <div className="sticky top-0 z-10 bg-white flex justify-between items-center p-6 px-8 border-b border-stone-100 shrink-0 rounded-t-[2.5rem] md:rounded-t-[2.5rem]">
+            <h3 className="text-xl font-black text-stone-800 tracking-tight">
+              {editingInventoryId ? '編輯' : '新增'}{isYarn ? '毛線' : '工具'}
+              {newInventoryForm.status === 'wishlist' && <span className="ml-2 text-[10px] bg-orange-100 text-orange-600 px-2 py-1 rounded-md uppercase tracking-widest align-middle">Wishlist</span>}
+            </h3>
+            <button onClick={() => { setIsAddInventoryOpen(false); setEditingInventoryId(null); setIsEnteringImageUrl(false); }} className="w-8 h-8 flex items-center justify-center bg-stone-100 text-stone-400 hover:text-stone-600 rounded-full transition-colors active:scale-95"><X size={16} strokeWidth={2.5} /></button>
+          </div>
+          
+          <div className="p-6 px-8 pt-4 overflow-y-auto space-y-8 pb-32 no-scrollbar bg-[#faf8f6]">
             
-            {/* 圖片上傳 / 網址輸入區塊 */}
-            {isEnteringImageUrl ? (
-              <div className="h-24 mb-2 flex flex-col justify-center bg-stone-50 border-2 border-dashed border-amber-200 rounded-2xl p-3 gap-2 relative transition-all">
-                <div className="flex items-center gap-2 h-full">
-                  <Link size={18} className="text-amber-500 shrink-0 ml-1" />
-                  <input 
-                    autoFocus
-                    type="url" 
-                    placeholder="輸入圖片網址 (URL)..." 
-                    value={newInventoryForm.image || ''} 
-                    onChange={e => setNewInventoryForm({...newInventoryForm, image: e.target.value})}
-                    className="flex-1 bg-white border border-stone-200 rounded-lg px-3 py-2.5 text-xs text-stone-700 outline-none focus:border-amber-300 shadow-sm"
-                  />
-                  <button onClick={() => setIsEnteringImageUrl(false)} className="bg-[#926c44] text-white p-2.5 rounded-lg shadow-sm hover:bg-[#7a5937] transition-colors">
-                    <Check size={16} strokeWidth={3} />
-                  </button>
-                </div>
+            {/* 📸 2. 影像視覺區 (Media Section) */}
+            <div className="space-y-3">
+              <label className="w-full aspect-video bg-transparent border-2 border-dashed border-stone-300 rounded-[2rem] flex flex-col items-center justify-center text-stone-400 hover:bg-white hover:border-amber-300 hover:text-amber-500 cursor-pointer transition-all relative overflow-hidden group shadow-sm bg-white/50">
+                {newInventoryForm.image ? (
+                  <>
+                    <img src={newInventoryForm.image} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-stone-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><Camera size={32} /></div>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={36} className="mb-2 text-stone-300 group-hover:text-amber-400 transition-colors" strokeWidth={1.5} />
+                    <span className="text-[10px] font-black tracking-widest uppercase text-stone-400 group-hover:text-amber-500 transition-colors">輕觸拍照或上傳</span>
+                  </>
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              </label>
+              
+              <div className="flex items-center bg-white border border-stone-200 rounded-2xl px-4 py-3.5 shadow-sm focus-within:border-amber-300 focus-within:ring-2 focus-within:ring-amber-50 transition-all">
+                <Link size={16} className="text-stone-400 mr-2 shrink-0" />
+                <input 
+                  type="url" 
+                  placeholder="或直接貼上網購圖片連結..." 
+                  value={newInventoryForm.image || ''} 
+                  onChange={e => setNewInventoryForm({...newInventoryForm, image: e.target.value})}
+                  className="flex-1 bg-transparent border-none outline-none text-xs text-stone-700 font-bold placeholder-stone-300"
+                />
               </div>
-            ) : (
-              <div className="flex gap-3 h-24 mb-2">
-                <label className="flex-1 flex flex-col items-center justify-center bg-stone-50 border-2 border-dashed border-stone-200 rounded-2xl text-stone-400 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 cursor-pointer transition-all">
-                  {newInventoryForm.image ? <img src={newInventoryForm.image} className="w-full h-full object-cover rounded-xl" /> : <><Camera size={24} className="mb-1"/><span className="text-[10px] font-black uppercase">Upload</span></>}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                </label>
-                <button onClick={() => setIsEnteringImageUrl(true)} className="flex-1 flex flex-col items-center justify-center bg-stone-50 border-2 border-dashed border-stone-200 rounded-2xl text-stone-400 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 transition-all">
-                  <Link size={24} className="mb-1"/><span className="text-[10px] font-black uppercase">URL</span>
-                </button>
-              </div>
-            )}
-            
-            <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">名稱</label><input type="text" value={newInventoryForm.name} onChange={e => setNewInventoryForm({...newInventoryForm, name: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold" /></div>
+            </div>
+
+            {/* 共通欄位 - 管理設定 */}
             {newInventoryForm.status !== 'wishlist' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className={newInventoryForm.status === 'wip' ? 'col-span-1' : 'col-span-2'}><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">庫存狀態</label><select value={newInventoryForm.status} onChange={e => setNewInventoryForm({...newInventoryForm, status: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold"><option value="idle">閒置中 (Idle)</option><option value="wip">使用中 (In Use / WIP)</option></select></div>
-                {newInventoryForm.status === 'wip' && <div className="col-span-1"><label className="text-[10px] font-black text-amber-600 uppercase tracking-widest block mb-2">綁定專案</label><select value={newInventoryForm.boundProjectId} onChange={e => setNewInventoryForm({...newInventoryForm, boundProjectId: e.target.value})} className="w-full bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 text-amber-800 outline-none text-sm font-bold"><option value="">請選擇專案...</option>{activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={newInventoryForm.status === 'wip' ? 'col-span-1' : 'col-span-2'}>
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">庫存狀態</label>
+                    <div className="relative">
+                      <select value={newInventoryForm.status} onChange={e => setNewInventoryForm({...newInventoryForm, status: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3 text-stone-700 outline-none text-sm font-bold shadow-sm focus:border-amber-300 transition-colors appearance-none pr-8">
+                        <option value="idle">閒置中</option>
+                        <option value="wip">使用中 (WIP)</option>
+                      </select>
+                      <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                    </div>
+                  </div>
+                  {newInventoryForm.status === 'wip' && (
+                    <div className="col-span-1">
+                      <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest block mb-2">綁定專案</label>
+                      <div className="relative">
+                        <select value={newInventoryForm.boundProjectId} onChange={e => setNewInventoryForm({...newInventoryForm, boundProjectId: e.target.value})} className="w-full bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-amber-800 outline-none text-[11px] font-bold shadow-sm appearance-none pr-8">
+                          <option value="">請選擇專案...</option>
+                          {activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-amber-500 pointer-events-none rotate-90" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
+            
+            <hr className="border-stone-200 border-dashed" />
+
+            {/* 🧶 3. 毛線表單排版細節 (Yarn Form Flow) */}
             {isYarn ? (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">原始克數 (g)</label><input type="number" value={newInventoryForm.originalAmount} onChange={e => setNewInventoryForm({...newInventoryForm, originalAmount: e.target.value, amount: editingInventoryId ? newInventoryForm.amount : e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">{newInventoryForm.status === 'wishlist' ? '預計購買 (g)' : '目前庫存 (g)'}</label><input type="number" value={newInventoryForm.amount} onChange={e => setNewInventoryForm({...newInventoryForm, amount: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold" /></div>
+              <div className="space-y-8">
+                {/* 第一區塊：基本辨識 */}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">品牌 (Brand)</label>
+                      <input type="text" value={newInventoryForm.brand || ''} onChange={e => setNewInventoryForm({...newInventoryForm, brand: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold shadow-sm focus:border-amber-300" placeholder="例如: Daruma" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">系列 (Series)</label>
+                      <input type="text" value={newInventoryForm.name} onChange={e => setNewInventoryForm({...newInventoryForm, name: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold shadow-sm focus:border-amber-300" placeholder="例如: GENMOU" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">色號 (Color Code)</label>
+                    <input type="text" value={newInventoryForm.colorCode || ''} onChange={e => setNewInventoryForm({...newInventoryForm, colorCode: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold shadow-sm focus:border-amber-300" placeholder="例如: #2 (Light Gray)" />
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">預估總長度 (m)</label><input type="number" value={newInventoryForm.totalLength} onChange={e => setNewInventoryForm({...newInventoryForm, totalLength: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold" /></div>
-                  {newInventoryForm.status !== 'wishlist' && <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">低水位警示 (g)</label><input type="number" value={newInventoryForm.lowStockThreshold} onChange={e => setNewInventoryForm({...newInventoryForm, lowStockThreshold: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold border-red-100" /></div>}
+
+                {/* 第二區塊：視覺與數量 */}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">色相 (Hue)</label>
+                      <select value={newInventoryForm.hue} onChange={e => setNewInventoryForm({...newInventoryForm, hue: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-[11px] font-bold shadow-sm focus:border-amber-300 appearance-none pr-8">
+                        {YARN_HUES.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                    </div>
+                    <div className="relative">
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">風格 (Dye Style)</label>
+                      <select value={newInventoryForm.dyeStyle} onChange={e => setNewInventoryForm({...newInventoryForm, dyeStyle: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-[11px] font-bold shadow-sm focus:border-amber-300 appearance-none pr-8">
+                        {YARN_DYE_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">當前重量 (g)</label>
+                      <input type="number" inputMode="decimal" value={newInventoryForm.amount} onChange={e => setNewInventoryForm({...newInventoryForm, amount: e.target.value, originalAmount: editingInventoryId ? newInventoryForm.originalAmount : e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-3 py-3.5 text-stone-700 outline-none text-xs font-bold shadow-sm focus:border-amber-300" placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2 flex items-center gap-1"><AlertTriangle size={10} className="mb-0.5" /> 最低警示 (g)</label>
+                      <input type="number" inputMode="decimal" value={newInventoryForm.lowStockThreshold} onChange={e => setNewInventoryForm({...newInventoryForm, lowStockThreshold: e.target.value})} className="w-full bg-red-50/50 border border-red-100 rounded-2xl px-3 py-3.5 text-red-600 outline-none text-xs font-bold shadow-sm focus:border-red-300 placeholder-red-200" placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">預估長度 (m)</label>
+                      <input type="number" inputMode="decimal" value={newInventoryForm.totalLength} onChange={e => setNewInventoryForm({...newInventoryForm, totalLength: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-3 py-3.5 text-stone-700 outline-none text-xs font-bold shadow-sm focus:border-amber-300" placeholder="0" />
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">色相</label><select value={newInventoryForm.hue} onChange={e => setNewInventoryForm({...newInventoryForm, hue: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold">{YARN_HUES.map(h => <option key={h} value={h}>{h}</option>)}</select></div>
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">粗細</label><select value={newInventoryForm.weight} onChange={e => setNewInventoryForm({...newInventoryForm, weight: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold">{YARN_WEIGHTS.map(w => <option key={w} value={w}>{w}</option>)}</select></div>
+
+                {/* 第三區塊：詳細規格 */}
+                <div className="space-y-3 bg-white p-5 rounded-[2rem] border border-stone-100 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Settings size={80} /></div>
+                  <div className="relative">
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">線材粗細級別 (Weight)</label>
+                    <select value={newInventoryForm.weight} onChange={e => setNewInventoryForm({...newInventoryForm, weight: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-xs font-bold focus:border-amber-300 appearance-none pr-8">
+                      {YARN_WEIGHTS.map(w => <option key={w} value={w}>{w}</option>)}
+                    </select>
+                    <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">纖維成份 (Fiber)</label>
+                    <input type="text" value={newInventoryForm.fiberContent || ''} onChange={e => setNewInventoryForm({...newInventoryForm, fiberContent: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-xs font-bold focus:border-amber-300 placeholder-stone-300" placeholder="70% Wool, 30% Silk" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">建議針號</label>
+                      <input type="text" value={newInventoryForm.suggestedNeedles || ''} onChange={e => setNewInventoryForm({...newInventoryForm, suggestedNeedles: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-xs font-bold focus:border-amber-300 placeholder-stone-300" placeholder="US 4-6" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">密度 (Gauge)</label>
+                      <input type="text" value={newInventoryForm.gauge || ''} onChange={e => setNewInventoryForm({...newInventoryForm, gauge: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-xs font-bold focus:border-amber-300 placeholder-stone-300" placeholder="22 sts = 4&quot;" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 第四區塊：收納與警示 */}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-1 relative">
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">購入來源</label>
+                      <select value={newInventoryForm.purchaseSource} onChange={e => setNewInventoryForm({...newInventoryForm, purchaseSource: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-[11px] font-bold shadow-sm focus:border-amber-300 appearance-none pr-6">
+                        <option value="店家">店家</option>
+                        <option value="網購">網購</option>
+                        <option value="轉讓">轉讓</option>
+                        <option value="其他">其他</option>
+                      </select>
+                      <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                    </div>
+                    <div className="col-span-1">
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">價格</label>
+                      <div className="flex bg-white border border-stone-200 rounded-2xl shadow-sm focus-within:border-amber-300 overflow-hidden">
+                        <select value={newInventoryForm.currency} onChange={e => setNewInventoryForm({...newInventoryForm, currency: e.target.value})} className="bg-stone-50 border-r border-stone-100 text-stone-500 outline-none text-[11px] font-bold px-3 py-3.5 appearance-none cursor-pointer hover:bg-stone-100 transition-colors shrink-0">
+                          <option value="TWD">NT$</option>
+                          <option value="JPY">¥</option>
+                          <option value="USD">$</option>
+                        </select>
+                        <input type="number" inputMode="decimal" value={newInventoryForm.price || ''} onChange={e => setNewInventoryForm({...newInventoryForm, price: e.target.value})} className="w-full px-3 py-3.5 text-stone-700 outline-none text-sm font-bold bg-transparent" placeholder="0" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Tags (標籤雲) */}
+                  <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm focus-within:border-amber-300 transition-colors">
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2 flex items-center gap-1.5"><Tag size={12}/> 標籤 (Tags)</label>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {(newInventoryForm.tags || []).map((tag, idx) => (
+                        <span key={idx} className="bg-stone-100 text-stone-600 px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center gap-1.5">
+                          {tag}
+                          <button onClick={() => setNewInventoryForm({...newInventoryForm, tags: newInventoryForm.tags.filter((_, i) => i !== idx)})} className="text-stone-400 hover:text-stone-600 rounded-full bg-white ml-0.5"><X size={10} strokeWidth={3}/></button>
+                        </span>
+                      ))}
+                      <input 
+                        type="text" 
+                        placeholder="多個標籤請按 Enter..." 
+                        className="flex-1 bg-transparent border-none outline-none text-[11px] font-bold min-w-[120px] placeholder-stone-300"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && e.target.value.trim()) {
+                            e.preventDefault();
+                            if (!(newInventoryForm.tags || []).includes(e.target.value.trim())) {
+                              setNewInventoryForm({...newInventoryForm, tags: [...(newInventoryForm.tags || []), e.target.value.trim()]});
+                            }
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
+
             ) : (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">數量 (件)</label><input type="number" value={newInventoryForm.amount} onChange={e => setNewInventoryForm({...newInventoryForm, amount: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">針號 (mm)</label><input type="text" value={newInventoryForm.needleSizeValue} onChange={e => setNewInventoryForm({...newInventoryForm, needleSizeValue: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold" /></div>
+
+              /* 🛠️ 4. 工具表單排版細節 (Tool Form Flow) */
+              <div className="space-y-8">
+                {/* 共通工具名稱 */}
+                <div>
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2 flex items-center gap-1.5"><Tag size={12}/> 工具名稱 (Name)</label>
+                  <input type="text" value={newInventoryForm.name} onChange={e => setNewInventoryForm({...newInventoryForm, name: e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold shadow-sm focus:border-amber-300 placeholder-stone-300" placeholder="例如: 紅色工具包" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">接頭規格</label><select value={newInventoryForm.jointSize} onChange={e => setNewInventoryForm({...newInventoryForm, jointSize: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold"><option>未指定</option>{TOOL_JOINT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                  <div><label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">材質</label><select value={newInventoryForm.material} onChange={e => setNewInventoryForm({...newInventoryForm, material: e.target.value})} className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold"><option>未指定</option>{TOOL_MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+
+                {/* 第一區塊：類別選擇 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">大類別</label>
+                    <select value={newInventoryForm.toolCategory || '針具類'} onChange={e => handleCategoryChange(e.target.value)} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3 text-stone-700 outline-none text-xs font-bold shadow-sm focus:border-amber-300 appearance-none pr-8">
+                      {Object.keys(TOOL_SCHEMA).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                  </div>
+                  {newInventoryForm.toolCategory && TOOL_SCHEMA[newInventoryForm.toolCategory] && (
+                    <div className="relative">
+                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">具體類型</label>
+                      <select value={`${newInventoryForm.toolType}_${newInventoryForm.toolSubtype}`} onChange={e => handleTypeSubtypeChange(e.target.value)} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3 text-stone-700 outline-none text-xs font-bold shadow-sm focus:border-amber-300 appearance-none pr-8">
+                        {Object.keys(TOOL_SCHEMA[newInventoryForm.toolCategory]).map(type => (
+                          <optgroup key={type} label={type}>
+                            {TOOL_SCHEMA[newInventoryForm.toolCategory][type].map(sub => (
+                              <option key={`${type}_${sub}`} value={`${type}_${sub}`}>{sub}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                    </div>
+                  )}
+                </div>
+
+                {/* 第二區塊：動態規格 */}
+                <div className="p-5 bg-white border border-stone-100 rounded-[2rem] shadow-sm space-y-4">
+                  <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Settings size={14}/> 規格明細</h4>
+                  
+                  {isCable ? (
+                    // 連接線表單
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-1 relative">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">接頭 (Joint)</label>
+                        <select value={newInventoryForm.jointSize} onChange={e => setNewInventoryForm({...newInventoryForm, jointSize: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 appearance-none pr-6">
+                          <option>未指定</option>
+                          {TOOL_JOINT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <ChevronRight size={12} className="absolute right-2 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">線長 (Length)</label>
+                        <input type="text" value={newInventoryForm.length || ''} onChange={e => setNewInventoryForm({...newInventoryForm, length: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 placeholder-stone-300" placeholder="60cm" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">顏色 (Color)</label>
+                        <input type="text" value={newInventoryForm.colorName || ''} onChange={e => setNewInventoryForm({...newInventoryForm, colorName: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 placeholder-stone-300" placeholder="透明紅" />
+                      </div>
+                    </div>
+                  ) : (
+                    // 其他針具/配件表單
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">品牌 (Brand)</label>
+                        <input type="text" value={newInventoryForm.brand || ''} onChange={e => setNewInventoryForm({...newInventoryForm, brand: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 placeholder-stone-300" placeholder="LYKKE, ChiaoGoo..." />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">針號 Size (mm)</label>
+                        <input type="text" value={newInventoryForm.needleSizeValue || ''} onChange={e => setNewInventoryForm({...newInventoryForm, needleSizeValue: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 placeholder-stone-300" placeholder="4.0, 5.0..." />
+                      </div>
+                      <div className="col-span-1 relative">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">材質 (Material)</label>
+                        <select value={newInventoryForm.material} onChange={e => setNewInventoryForm({...newInventoryForm, material: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 appearance-none pr-8">
+                          <option>未指定</option>
+                          {TOOL_MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <ChevronRight size={14} className="absolute right-3.5 bottom-3.5 text-stone-400 pointer-events-none rotate-90" />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">長度 (Length)</label>
+                        <input type="text" value={newInventoryForm.length || ''} onChange={e => setNewInventoryForm({...newInventoryForm, length: e.target.value})} className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-700 outline-none text-[11px] font-bold focus:border-amber-300 placeholder-stone-300" placeholder="單頭/固定長度" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 第三區塊：管理設定 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2">當前數量 (件)</label>
+                    <input type="number" inputMode="numeric" value={newInventoryForm.amount} onChange={e => setNewInventoryForm({...newInventoryForm, amount: e.target.value, originalAmount: editingInventoryId ? newInventoryForm.originalAmount : e.target.value})} className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3.5 text-stone-700 outline-none text-sm font-bold shadow-sm focus:border-amber-300" placeholder="1" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2 flex items-center gap-1"><AlertTriangle size={10} className="mb-0.5" /> 最低警示數量</label>
+                    <input type="number" inputMode="numeric" value={newInventoryForm.lowStockThreshold} onChange={e => setNewInventoryForm({...newInventoryForm, lowStockThreshold: e.target.value})} className="w-full bg-red-50/50 border border-red-100 rounded-2xl px-4 py-3.5 text-red-600 outline-none text-sm font-bold shadow-sm focus:border-red-300 placeholder-red-200" placeholder="0" />
+                  </div>
                 </div>
               </div>
             )}
-            <div className="flex gap-4 pt-4"><button onClick={() => {setIsAddInventoryOpen(false); setIsEnteringImageUrl(false);}} className="flex-1 py-4 bg-stone-100 text-stone-500 rounded-full font-black uppercase tracking-widest text-xs">取消</button><button onClick={handleSaveInventory} className="flex-[2] bg-[#44403c] text-white py-4 rounded-full font-black uppercase tracking-widest text-xs shadow-xl shadow-stone-800/20">儲存變更</button></div>
+          </div>
+
+          {/* 5.6. 底部動作列 (Sticky Footer) */}
+          <div className="absolute bottom-0 w-full flex gap-3 p-5 px-6 bg-white/95 backdrop-blur-xl border-t border-stone-100 rounded-b-[2.5rem] md:rounded-b-[2.5rem] z-20 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
+            <button onClick={() => {setIsAddInventoryOpen(false); setIsEnteringImageUrl(false);}} className="flex-[3] py-4 bg-stone-100 hover:bg-stone-200 text-stone-500 rounded-2xl font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all outline-none">
+              取消
+            </button>
+            <button onClick={handleSaveInventory} className="flex-[7] bg-[#926c44] hover:bg-[#7a5937] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl shadow-[#926c44]/20 active:scale-95 transition-all outline-none">
+              儲存變更
+            </button>
           </div>
         </div>
       </div>
@@ -514,13 +832,27 @@ export default function InventoryManager({ inventory, setInventory, projects, se
       {isQRModalOpen && selectedInventoryItem && (
         <div className="fixed inset-0 z-[130] flex flex-col items-center justify-center bg-stone-900/80 backdrop-blur-sm p-6 animate-fade-in pointer-events-auto" onClick={() => setIsQRModalOpen(false)}>
             <div className="bg-white w-full max-w-[280px] rounded-3xl shadow-2xl overflow-hidden relative flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
-                <div className="h-4 bg-[#926c44] w-full" />
-                <div className="p-6 flex flex-col items-center">
-                    <div className="w-16 h-16 bg-stone-100 rounded-2xl flex items-center justify-center text-[#926c44] mb-4 shadow-inner"><QrCode size={36} strokeWidth={2} /></div>
+                <div ref={qrRef} className="bg-white flex flex-col items-center pt-8 pb-6 px-6 relative">
+                    <div className="absolute top-0 left-0 w-full h-4 bg-[#926c44]" />
+                    <div className="w-32 h-32 bg-white rounded-2xl flex items-center justify-center text-[#926c44] mb-5 shadow-sm border border-stone-100 p-2">
+                        <QRCodeSVG 
+                            value={JSON.stringify({ id: selectedInventoryItem.id, type: selectedInventoryItem.type })} 
+                            size={100} 
+                            level={"H"} 
+                            fgColor="#44403c" 
+                            bgColor="#ffffff" 
+                            includeMargin={false}
+                        />
+                    </div>
                     <h2 className="text-xl font-black text-stone-800 text-center leading-tight mb-1">{selectedInventoryItem.name}</h2>
-                    <div className="w-full flex gap-3 mt-6">
-                        <button onClick={() => setIsQRModalOpen(false)} className="flex-1 py-3.5 bg-stone-100 text-stone-500 rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all">關閉</button>
-                        <button onClick={() => { setIsDownloadingQR(true); setTimeout(() => { setIsDownloadingQR(false); setIsQRModalOpen(false); }, 1500); }} disabled={isDownloadingQR} className={`flex-[2] py-3.5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isDownloadingQR ? 'bg-green-500 text-white' : 'bg-[#44403c] text-white'}`}>
+                    {selectedInventoryItem.brand && selectedInventoryItem.brand !== '未指定' && (
+                        <p className="text-[10px] font-bold text-stone-400 mt-1 uppercase tracking-widest">{selectedInventoryItem.brand}</p>
+                    )}
+                </div>
+                <div className="px-6 pb-6 pt-2 flex flex-col items-center bg-stone-50 border-t border-stone-100">
+                    <div className="w-full flex gap-3">
+                        <button onClick={() => setIsQRModalOpen(false)} className="flex-1 py-3.5 bg-white border border-stone-200 text-stone-500 rounded-2xl font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all">關閉</button>
+                        <button onClick={handleDownloadQR} disabled={isDownloadingQR} className={`flex-[2] py-3.5 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isDownloadingQR ? 'bg-green-500 text-white' : 'bg-[#44403c] text-white'}`}>
                             {isDownloadingQR ? <><Check size={14} /> 已儲存</> : <><Download size={14} /> 儲存標籤</>}
                         </button>
                     </div>

@@ -152,6 +152,17 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
         setResetConfirmTarget(null);
     };
 
+    const handleCompleteProject = () => {
+        if (!window.confirm('確定要將此專案標記為已完成並收至歷史資料夾嗎？')) return;
+        setProjects(prev => prev.map(p => p.id === projectId ? {
+            ...p,
+            status: '已完成',
+            lastEdited: Date.now()
+        } : p));
+        setIsTimerRunning(false);
+        onClose();
+    };
+
     const renderHighlightedInstruction = (text, method) => {
         if (!text) return null;
         const terms = method === '棒針' ? KNIT_TERMS : CROCHET_TERMS;
@@ -196,6 +207,7 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
                     <button onClick={() => setIsAssistantOpen(true)} className="flex items-center justify-center group pointer-events-auto"><h3 className={`font-black tracking-widest text-sm uppercase truncate max-w-[120px] transition-colors ${isDark ? 'text-[#926c44] group-hover:text-amber-500' : 'text-stone-800 group-hover:text-[#926c44]'}`}>{currentProject.name}</h3></button>
                 </div>
                 <div className="flex gap-2 items-center shrink-0">
+                    <button onClick={handleCompleteProject} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all shadow-sm ${isDark ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}><CheckCircle size={12} strokeWidth={2.5} /> 完成</button>
                     <button onClick={() => setWorkspaceTheme(isDark ? 'light' : 'dark')} className={`p-2 rounded-full transition-colors active:scale-95 ${isDark ? 'bg-white/5 text-amber-400 hover:text-amber-300' : 'bg-stone-200/50 text-amber-500 hover:text-amber-600'}`}>{isDark ? <Moon size={14} /> : <Sun size={14} />}</button>
                     <button onClick={() => setIsWorkspaceSettingsOpen(true)} className={`p-2 rounded-full transition-colors relative active:scale-95 ${isDark ? 'bg-white/5 hover:text-white' : 'bg-stone-200/50 hover:text-stone-800'}`}><Settings size={14} />{(cA.linkAction !== 0 || cB.linkAction !== 0) && <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-amber-500 border border-transparent" />}</button>
                     <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full font-mono text-[10px] font-black transition-all ${isTimerRunning ? 'bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-inner' : (isDark ? 'bg-white/5 text-stone-400 border border-transparent' : 'bg-stone-200/50 text-stone-500 border border-transparent')}`}>{isTimerRunning ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}{formatTime(currentProject.timeSpent)}</button>
