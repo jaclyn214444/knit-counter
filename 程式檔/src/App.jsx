@@ -22,6 +22,7 @@ export default function App() {
     const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
     const isWorkspaceMode = activeWorkspaceId !== null;
     const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
+    const [pendingEditProjectId, setPendingEditProjectId] = useState(null);
 
     return (
         <div className="min-h-screen bg-stone-100 flex justify-center font-sans selection:bg-amber-200 selection:text-amber-900">
@@ -37,7 +38,7 @@ export default function App() {
         `}} />
 
                 <main className="flex-1 overflow-y-auto relative z-10 no-scrollbar">
-                    {activeTab === 'projects' && !isWorkspaceMode && <ProjectList projects={projects} setProjects={setProjects} inventory={inventory} setActiveWorkspaceId={setActiveWorkspaceId} setIsAnyModalOpen={setIsAnyModalOpen} />}
+                    {activeTab === 'projects' && !isWorkspaceMode && <ProjectList projects={projects} setProjects={setProjects} inventory={inventory} setActiveWorkspaceId={setActiveWorkspaceId} setIsAnyModalOpen={setIsAnyModalOpen} pendingEditProjectId={pendingEditProjectId} setPendingEditProjectId={setPendingEditProjectId} />}
                     {activeTab === 'inventory' && !isWorkspaceMode && <InventoryManager inventory={inventory} setInventory={setInventory} projects={projects} setIsAnyModalOpen={setIsAnyModalOpen} />}
                     {activeTab === 'stats' && !isWorkspaceMode && <div className="p-6 text-center text-stone-400 mt-20"><BarChart2 size={48} className="mx-auto mb-4" />統計開發中</div>}
                 </main>
@@ -59,7 +60,7 @@ export default function App() {
                     </ul>
                 </nav>
 
-                {isWorkspaceMode && <Workspace projectId={activeWorkspaceId} projects={projects} setProjects={setProjects} inventory={inventory} onClose={() => setActiveWorkspaceId(null)} />}
+                {isWorkspaceMode && <Workspace projectId={activeWorkspaceId} projects={projects} setProjects={setProjects} inventory={inventory} onClose={() => setActiveWorkspaceId(null)} onRequestEdit={() => { setPendingEditProjectId(activeWorkspaceId); setActiveWorkspaceId(null); }} />}
             </div>
         </div>
     );

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useLocalStorage, formatTime, playAudioFeedback, playTargetReachedSound, createDefaultCounter, getLapProgress } from '../utils/helpers';
 import { KNIT_TERMS, CROCHET_TERMS } from '../utils/constants';
-export default function Workspace({ projectId, projects, setProjects, inventory, onClose }) {
+export default function Workspace({ projectId, projects, setProjects, inventory, onClose, onRequestEdit }) {
     const currentProject = projects.find(p => p.id === projectId);
 
     // 這裡將原本擠在 App.jsx 中的工作區專屬狀態「下放」到 Workspace 元件中
@@ -204,7 +204,10 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
             <div className={`px-5 py-4 flex justify-between items-center shrink-0 border-b z-10 transition-colors ${isDark ? 'bg-[#121212] border-white/5 text-stone-400' : 'bg-[#faf8f6] border-stone-200 text-stone-500'}`}>
                 <div className="flex items-center gap-2">
                     <button onClick={() => { setIsTimerRunning(false); onClose(); }} className={`p-2 rounded-full transition-colors active:scale-95 ${isDark ? 'bg-white/5 hover:text-white' : 'bg-stone-200/50 hover:text-stone-800'}`}><ChevronLeft size={18} /></button>
-                    <button onClick={() => setIsAssistantOpen(true)} className="flex items-center justify-center group pointer-events-auto"><h3 className={`font-black tracking-widest text-sm uppercase truncate max-w-[120px] transition-colors ${isDark ? 'text-[#926c44] group-hover:text-amber-500' : 'text-stone-800 group-hover:text-[#926c44]'}`}>{currentProject.name}</h3></button>
+                    <button onClick={() => setIsAssistantOpen(true)} className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full transition-all active:scale-95 group border pointer-events-auto ${isDark ? 'bg-white/5 border-white/5 hover:bg-white/10 text-stone-300 hover:text-white' : 'bg-stone-100 border-stone-200 hover:bg-stone-200 text-stone-700 hover:text-stone-900'}`}>
+                        <h3 className="font-black tracking-widest text-xs uppercase truncate max-w-[110px] sm:max-w-[150px]">{currentProject.name}</h3>
+                        <Info size={12} className={isDark ? 'text-stone-500 group-hover:text-stone-400' : 'text-stone-400 group-hover:text-stone-500'} />
+                    </button>
                 </div>
                 <div className="flex gap-2 items-center shrink-0">
                     <button onClick={handleCompleteProject} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest transition-all shadow-sm ${isDark ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}><CheckCircle size={12} strokeWidth={2.5} /> 完成</button>
@@ -319,7 +322,12 @@ export default function Workspace({ projectId, projects, setProjects, inventory,
                         </div>
                         <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pb-10">
                             <div className={`p-5 rounded-2xl border ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-stone-100 shadow-sm'}`}>
-                                <h4 className={`font-black text-lg mb-3 ${isDark ? 'text-white' : 'text-stone-800'}`}>{currentProject.name}</h4>
+                                <div className="flex justify-between items-start mb-3">
+                                    <h4 className={`font-black text-lg ${isDark ? 'text-white' : 'text-stone-800'}`}>{currentProject.name}</h4>
+                                    <button onClick={() => { if (typeof onRequestEdit === 'function') onRequestEdit(); }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors active:scale-95 ${isDark ? 'bg-white/10 text-stone-300 hover:bg-white/20' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}>
+                                        <Edit3 size={12} /> 編輯專案
+                                    </button>
+                                </div>
                                 <div className="flex flex-wrap gap-2">
                                     <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${isDark ? 'bg-white/10 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>{currentProject.method}</span>
                                     <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${isDark ? 'bg-[#926c44]/20 text-[#926c44]' : 'bg-[#926c44]/10 text-[#926c44]'}`}>{currentProject.mode}</span>

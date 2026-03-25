@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   FolderOpen, Plus,
-  Play, X,
+  Play, X, ChevronLeft,
   Search, Shield,
   Archive, Scissors, FileText, UploadCloud, CheckCircle, Check, Image as ImageIcon,
   MoreVertical, Edit3, Trash2, History, RotateCcw, Tag, Minus, ScanFace, Camera
 } from 'lucide-react';
 import { formatRelativeTime, createDefaultCounter } from '../utils/helpers';
 
-export default function ProjectList({ projects, setProjects, inventory = [], setActiveWorkspaceId, setIsAnyModalOpen }) {
+export default function ProjectList({ projects, setProjects, inventory = [], setActiveWorkspaceId, setIsAnyModalOpen, pendingEditProjectId, setPendingEditProjectId, onEditModalClose }) {
   const [projectSearchQuery, setProjectSearchQuery] = useState('');
   const [isProjectSearchExpanded, setIsProjectSearchExpanded] = useState(false);
   const [isTrustBannerExpanded, setIsTrustBannerExpanded] = useState(false);
@@ -38,6 +38,17 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
     }
   }, [isAddProjectOpen, setIsAnyModalOpen]);
 
+  // 接住從 Workspace 傳來的編輯請求
+  useEffect(() => {
+    if (pendingEditProjectId) {
+      const projToEdit = projects.find(p => p.id === pendingEditProjectId);
+      if (projToEdit) {
+        handleEditProject(projToEdit);
+      }
+      if (setPendingEditProjectId) setPendingEditProjectId(null);
+    }
+  }, [pendingEditProjectId, projects, setPendingEditProjectId]);
+
   const filteredProjects = useMemo(() => {
     const search = projectSearchQuery.toLowerCase();
     let result = projects.filter(p => isHistoryView ? p.status === '已完成' : p.status !== '已完成');
@@ -55,6 +66,7 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
     setNewProjectForm({ name: '', method: '棒針', mode: '自由模式', yarns: [], tools: [] });
     setParsedPatternData(null);
     setIsParsingPdf(false);
+    if (typeof onEditModalClose === 'function') onEditModalClose();
   };
 
   const handlePdfUpload = (e) => {
@@ -344,18 +356,28 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
             <input autoFocus type="text" placeholder="搜尋專案名稱、工具或模式..." value={projectSearchQuery} onChange={(e) => setProjectSearchQuery(e.target.value)} onBlur={() => !projectSearchQuery && setIsProjectSearchExpanded(false)} className="flex-1 bg-transparent border-none outline-none text-xs text-stone-700 py-0" />
             {projectSearchQuery && <button onClick={() => { setProjectSearchQuery(''); setIsProjectSearchExpanded(false); }} className="text-stone-300 hover:text-stone-500 transition-colors"><X size={14} strokeWidth={3} /></button>}
           </div>
+        ) : isHistoryView ? (
+          <div className="flex items-center gap-3 w-full animate-fade-in">
+            <button onClick={() => setIsHistoryView(false)} className="p-2 bg-white rounded-full shadow-sm border border-stone-200 text-stone-500 hover:text-stone-800 hover:bg-stone-50 active:scale-95 transition-all">
+              <ChevronLeft size={20} />
+            </button>
+            <h2 className="text-xl font-black tracking-tight text-stone-800 flex-1">
+              📦 歷史資料夾
+            </h2>
+          </div>
         ) : (
           <h2 className="text-xl font-black tracking-tight text-stone-800 animate-fade-in flex items-center gap-2">
-            {isHistoryView ? '📦 歷史資料夾' : '✨ 我的編織專案'}
-            {!isHistoryView && <button onClick={() => setIsTrustBannerExpanded(true)} className="p-1.5 rounded-full transition-all active:scale-90 bg-[#926c44]/10 text-[#926c44] hover:bg-[#926c44]/20" title="資料安全防護狀態"><Shield size={14} strokeWidth={2.5} /></button>}
+            ✨ 我的編織專案
+            <button onClick={() => setIsTrustBannerExpanded(true)} className="p-1.5 rounded-full transition-all active:scale-90 bg-[#926c44]/10 text-[#926c44] hover:bg-[#926c44]/20" title="資料安全防護狀態"><Shield size={14} strokeWidth={2.5} /></button>
           </h2>
         )}
         {!isProjectSearchExpanded && (
             <div className="flex gap-2 items-center ml-2 shrink-0">
-                <button onClick={() => setIsHistoryView(!isHistoryView)} className={`p-2.5 rounded-full shadow-sm border transition-colors active:scale-95 flex items-center gap-1.5 ${isHistoryView ? 'bg-[#926c44] text-white border-[#926c44]' : 'bg-white text-stone-400 border-stone-100 hover:bg-stone-50 hover:text-stone-600'}`} title="歷史資料夾">
-                    <Archive size={16} strokeWidth={2.5} />
-                    {isHistoryView && <span className="text-[10px] font-black uppercase tracking-widest pl-0.5">歷史資料夾</span>}
-                </button>
+                {!isHistoryView && (
+                    <button onClick={() => setIsHistoryView(true)} className="p-2.5 rounded-full shadow-sm border transition-colors active:scale-95 flex items-center gap-1.5 bg-white text-stone-400 border-stone-100 hover:bg-stone-50 hover:text-stone-600" title="歷史資料夾">
+                        <Archive size={16} strokeWidth={2.5} />
+                    </button>
+                )}
                 <button onClick={() => setIsProjectSearchExpanded(true)} className="p-2.5 bg-white text-[#926c44] rounded-full shadow-sm border border-stone-100 hover:bg-stone-50 transition-colors active:scale-95"><Search size={18} strokeWidth={2.5} /></button>
             </div>
         )}
@@ -367,51 +389,54 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
           <p className="font-bold text-sm text-center">{projectSearchQuery ? '找不到符合條件的專案' : (isHistoryView ? '歷史資料夾目前空空的唷！' : '目前沒有專案，點擊右下角新增吧！')}</p>
         </div>
       ) : (
-        filteredProjects.map(p => {
-          const cA = p.counterA || { name: '段數', value: p.rows || 0 };
-          const cB = p.counterB || { name: '針數', value: p.stitches || 0 };
+        <div className={isHistoryView ? "grid grid-cols-2 gap-4 animate-fade-in" : "flex flex-col animate-fade-in w-full"}>
+          {filteredProjects.map(p => {
+            const cA = p.counterA || { name: '段數', value: p.rows || 0 };
+            const cB = p.counterB || { name: '針數', value: p.stitches || 0 };
 
-          if (isHistoryView) {
-              const hours = Math.floor((p.timeSpent || 0) / 3600);
-              const mins = Math.floor(((p.timeSpent || 0) % 3600) / 60);
-              const timeString = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-              let thumbSrc = null;
-              if (p.photos && p.photos.length > 0) thumbSrc = p.photos[0];
-              else if (p.yarns && p.yarns.length > 0) {
-                  const mainYarn = inventory.find(i => i.id === p.yarns[0]);
-                  if (mainYarn?.image) thumbSrc = mainYarn.image;
-              }
+            if (isHistoryView) {
+                const hours = Math.floor((p.timeSpent || 0) / 3600);
+                const mins = Math.floor(((p.timeSpent || 0) % 3600) / 60);
+                const timeString = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+                let thumbSrc = null;
+                if (p.photos && p.photos.length > 0) thumbSrc = p.photos[0];
+                else if (p.yarns && p.yarns.length > 0) {
+                    const mainYarn = inventory.find(i => i.id === p.yarns[0]);
+                    if (mainYarn?.image) thumbSrc = mainYarn.image;
+                }
 
-              return (
-                  <div key={p.id} onClick={() => setActiveHistoryProject(p)} className="bg-white p-4 rounded-3xl shadow-sm border border-stone-200 mb-4 relative group flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]">
-                      <div className="w-20 h-20 rounded-2xl bg-stone-100 overflow-hidden shrink-0 flex items-center justify-center relative shadow-inner">
-                          {thumbSrc ? <img src={thumbSrc} className="w-full h-full object-cover" /> : <ImageIcon size={24} className="text-stone-300" />}
-                      </div>
-                      <div className="flex-1 min-w-0 pr-8">
-                          <h3 className="font-black text-base text-stone-800 leading-tight mb-1.5 truncate">{p.name}</h3>
-                          <div className="flex items-center gap-1.5 text-stone-500">
-                              <History size={12} className="opacity-50" />
-                              <span className="text-xs font-bold font-mono">{timeString}</span>
-                          </div>
-                      </div>
-                      
-                      <div className="absolute top-4 right-4 shrink-0">
-                          <button
-                              onClick={(e) => { e.stopPropagation(); setActiveProjectMenuId(activeProjectMenuId === p.id ? null : p.id); }}
-                              className="p-1 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-full transition-colors"
-                          >
-                              <MoreVertical size={16} />
-                          </button>
-                          {activeProjectMenuId === p.id && (
-                              <div className="absolute right-0 top-8 bg-white rounded-2xl shadow-xl border border-stone-100 py-1.5 w-32 z-50 animate-fade-in flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                                  <button onClick={(e) => { e.stopPropagation(); handleToggleComplete(p); }} className="px-4 py-3 text-xs font-bold text-stone-600 hover:bg-stone-50 text-left flex items-center gap-2"><RotateCcw size={14} className="text-stone-400" /> 還原專案</button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(p.id); }} className="px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50 text-left flex items-center gap-2 border-t border-stone-100"><Trash2 size={14} className="text-red-400" /> 刪除專案</button>
-                              </div>
-                          )}
-                      </div>
-                  </div>
-              );
-          }
+                return (
+                    <div key={p.id} onClick={() => setActiveHistoryProject(p)} className="bg-stone-100 rounded-[2rem] shadow-sm border border-stone-200/60 relative group flex flex-col cursor-pointer hover:shadow-md transition-all active:scale-[0.98] overflow-hidden aspect-square">
+                        <div className="flex-1 w-full bg-stone-100 flex flex-col items-center justify-center relative shadow-inner overflow-hidden">
+                            {thumbSrc ? <img src={thumbSrc} className="w-full h-full object-cover absolute inset-0" /> : <ImageIcon size={32} className="text-stone-300 absolute" />}
+                            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none"></div>
+                            
+                            <div className="absolute bottom-4 left-4 right-4 text-white">
+                                <h3 className="font-black text-sm leading-tight mb-1 truncate drop-shadow-md pr-6">{p.name}</h3>
+                                <div className="flex items-center gap-1 opacity-90">
+                                    <History size={10} />
+                                    <span className="text-[10px] font-bold font-mono drop-shadow-md">{timeString}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="absolute top-2 right-2 shrink-0 z-10">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setActiveProjectMenuId(activeProjectMenuId === p.id ? null : p.id); }}
+                                className="p-1.5 text-white/90 hover:text-white hover:bg-black/30 rounded-full transition-colors backdrop-blur-sm bg-black/10"
+                            >
+                                <MoreVertical size={16} />
+                            </button>
+                            {activeProjectMenuId === p.id && (
+                                <div className="absolute right-0 top-8 bg-white rounded-2xl shadow-xl border border-stone-100 py-1.5 w-32 z-50 animate-fade-in flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                                    <button onClick={(e) => { e.stopPropagation(); handleToggleComplete(p); }} className="px-4 py-3 text-xs font-bold text-stone-600 hover:bg-stone-50 text-left flex items-center gap-2"><RotateCcw size={14} className="text-stone-400" /> 還原專案</button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(p.id); }} className="px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50 text-left flex items-center gap-2 border-t border-stone-100"><Trash2 size={14} className="text-red-400" /> 刪除專案</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
 
           return (
             <div key={p.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-stone-200 mb-5 relative group flex items-center justify-between gap-4" onClick={e => e.stopPropagation()}>
@@ -457,7 +482,8 @@ export default function ProjectList({ projects, setProjects, inventory = [], set
               )}
             </div>
           )
-        })
+        })}
+        </div>
       )}
 
       {/* 新增專案 Floating Action Button (進行中專案才出現) */}

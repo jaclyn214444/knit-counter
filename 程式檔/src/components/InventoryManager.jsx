@@ -14,6 +14,7 @@ import {
 } from '../utils/constants';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
+import BarcodeScanner from './BarcodeScanner';
 
 export default function InventoryManager({ inventory, setInventory, projects, setIsAnyModalOpen }) {
     const [inventoryType, setInventoryType] = useState('yarn');
@@ -31,6 +32,8 @@ export default function InventoryManager({ inventory, setInventory, projects, se
     const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
     const [isFabMenuOpen, setIsFabMenuOpen] = useState(false);
     const [isDetailMenuOpen, setIsDetailMenuOpen] = useState(false);
+    const [isScanningBarcode, setIsScanningBarcode] = useState(false);
+    const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
     const qrRef = useRef(null);
 
     const [newInventoryForm, setNewInventoryForm] = useState({
@@ -38,7 +41,7 @@ export default function InventoryManager({ inventory, setInventory, projects, se
         weight: '3 Light', hue: '白色/米色', dyeStyle: '單色 (Solid)', colorCode: '',
         toolCategory: '針具類', toolType: '棒針', toolSubtype: '固定式輪針',
         material: '未指定', jointSize: '未指定', length: '未指定', brand: '',
-        needleSizeValue: '', needleSizeUnit: 'mm', image: '',
+        needleSizeValue: '', needleSizeUnit: 'mm', image: '', barcode: '',
         fiberContent: '', suggestedNeedles: '', gauge: '', purchaseSource: '店家', price: '', currency: 'TWD', tags: [], colorName: ''
     });
 
@@ -166,6 +169,55 @@ export default function InventoryManager({ inventory, setInventory, projects, se
             };
             reader.readAsDataURL(file);
         }
+    };
+
+    const handleScanBarcode = () => {
+        setIsBarcodeScannerOpen(true);
+    };
+
+    const handleBarcodeScanned = (barcode) => {
+        setIsBarcodeScannerOpen(false);
+        setIsScanningBarcode(true);
+        // 模擬解析實際條碼並向 API 索要資料的過程
+        setTimeout(() => {
+            setIsScanningBarcode(false);
+            if (newInventoryForm.type === 'yarn') {
+                setNewInventoryForm(prev => ({
+                    ...prev,
+                    barcode, // 實際記錄掃描到的條碼
+                    brand: 'Daruma',
+                    name: 'GENMOU',
+                    colorCode: '#2 (Light Gray)',
+                    hue: '灰色/銀色',
+                    dyeStyle: '單色 (Solid)',
+                    weight: '3 Light',
+                    fiberContent: '100% Merino Wool',
+                    suggestedNeedles: 'US 4-6 (3.5-4.0mm)',
+                    gauge: '22 sts = 4"',
+                    amount: '50',
+                    totalLength: '150',
+                    price: '300',
+                    image: 'https://images.unsplash.com/photo-1620286829774-8b6eb4c519aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
+                }));
+            } else {
+                setNewInventoryForm(prev => ({
+                    ...prev,
+                    barcode, // 實際記錄掃描到的條碼
+                    name: 'LYKKE 組合式輪針 (木)',
+                    toolCategory: '針具類',
+                    toolType: '棒針',
+                    toolSubtype: '組合式輪針 (頭)',
+                    brand: 'LYKKE',
+                    material: '木/竹',
+                    needleSizeValue: '4.0',
+                    needleSizeUnit: 'mm',
+                    length: '單頭',
+                    amount: '1',
+                    price: '450'
+                }));
+            }
+            alert(`✅ 條碼掃描成功！取得國際條碼號：\n👉 ${barcode}\n\n系統已為您存下該條碼，並模擬從 Ravelry 等外部 API 取得對應此商品的格式資訊。`);
+        }, 800);
     };
 
 // --- 介面渲染組件 (庫存) ---
@@ -330,8 +382,8 @@ export default function InventoryManager({ inventory, setInventory, projects, se
         <div className="absolute bottom-20 right-6 z-40 flex flex-col items-end gap-4 pointer-events-auto">
             {isFabMenuOpen && (
                 <div className="flex flex-col items-end gap-3 animate-slide-up origin-bottom">
+                    <button onClick={() => { setIsFabMenuOpen(false); setEditingInventoryId(null); setNewInventoryForm({ ...newInventoryForm, status: 'idle', type: inventoryType, name: '' }); setIsAddInventoryOpen(true); }} className="flex items-center gap-3 bg-[#926c44] px-5 py-3 rounded-full shadow-xl border border-[#926c44] text-white font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">新增現有庫存 <Archive size={16} /></button>
                     <button onClick={() => { setIsFabMenuOpen(false); setEditingInventoryId(null); setNewInventoryForm({ ...newInventoryForm, status: 'wishlist', type: inventoryType, name: '' }); setIsAddInventoryOpen(true); }} className="flex items-center gap-3 bg-white px-5 py-3 rounded-full shadow-xl border border-orange-100 text-orange-600 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">新增待買清單 <ShoppingCart size={16} /></button>
-                    <button onClick={() => { setIsFabMenuOpen(false); setEditingInventoryId(null); setNewInventoryForm({ ...newInventoryForm, status: 'idle', type: inventoryType, name: '' }); setIsAddInventoryOpen(true); }} className="flex items-center gap-3 bg-white px-5 py-3 rounded-full shadow-xl border border-stone-200 text-[#926c44] font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">新增現有庫存 <Archive size={16} /></button>
                 </div>
             )}
             <button onClick={() => setIsFabMenuOpen(!isFabMenuOpen)} className={`w-16 h-16 bg-[#926c44] text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 active:scale-90 ${isFabMenuOpen ? 'rotate-45 bg-stone-500' : ''}`}><Plus size={32} strokeWidth={3} /></button>
@@ -460,30 +512,30 @@ export default function InventoryManager({ inventory, setInventory, projects, se
             
             {/* 📸 2. 影像視覺區 (Media Section) */}
             <div className="space-y-3">
-              <label className="w-full aspect-video bg-transparent border-2 border-dashed border-stone-300 rounded-[2rem] flex flex-col items-center justify-center text-stone-400 hover:bg-white hover:border-amber-300 hover:text-amber-500 cursor-pointer transition-all relative overflow-hidden group shadow-sm bg-white/50">
-                {newInventoryForm.image ? (
-                  <>
-                    <img src={newInventoryForm.image} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-stone-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><Camera size={32} /></div>
-                  </>
-                ) : (
-                  <>
-                    <Camera size={36} className="mb-2 text-stone-300 group-hover:text-amber-400 transition-colors" strokeWidth={1.5} />
-                    <span className="text-[10px] font-black tracking-widest uppercase text-stone-400 group-hover:text-amber-500 transition-colors">輕觸拍照或上傳</span>
-                  </>
-                )}
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-              </label>
+              {newInventoryForm.image && (
+                  <div className="w-full aspect-[2/1] bg-stone-100 border border-stone-200 rounded-[1.5rem] overflow-hidden relative shadow-sm group">
+                      <img src={newInventoryForm.image} className="w-full h-full object-cover" />
+                      <button onClick={(e) => { e.preventDefault(); setNewInventoryForm({...newInventoryForm, image: ''}); }} className="absolute top-3 right-3 p-1.5 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all"><X size={14} strokeWidth={3} /></button>
+                  </div>
+              )}
               
-              <div className="flex items-center bg-white border border-stone-200 rounded-2xl px-4 py-3.5 shadow-sm focus-within:border-amber-300 focus-within:ring-2 focus-within:ring-amber-50 transition-all">
-                <Link size={16} className="text-stone-400 mr-2 shrink-0" />
-                <input 
-                  type="url" 
-                  placeholder="或直接貼上網購圖片連結..." 
-                  value={newInventoryForm.image || ''} 
-                  onChange={e => setNewInventoryForm({...newInventoryForm, image: e.target.value})}
-                  className="flex-1 bg-transparent border-none outline-none text-xs text-stone-700 font-bold placeholder-stone-300"
-                />
+              <div className="flex gap-2">
+                  <label className="flex-1 min-w-0 bg-white border-2 border-dashed border-stone-300 rounded-2xl px-2 py-3.5 flex justify-center items-center gap-1.5 text-stone-500 hover:border-amber-300 hover:text-amber-500 hover:bg-amber-50/10 cursor-pointer transition-all shadow-sm">
+                      <Camera size={14} className="shrink-0" strokeWidth={2.5} />
+                      <span className="text-[10px] font-black tracking-widest uppercase truncate">{newInventoryForm.image ? '重新上傳' : '拍照或上傳'}</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                  </label>
+                  
+                  <div className="flex-1 min-w-0 flex items-center bg-white border border-stone-200 rounded-2xl px-3 py-3.5 shadow-sm focus-within:border-amber-300 transition-all">
+                      <Link size={14} className="text-stone-400 mr-2 shrink-0" strokeWidth={2.5} />
+                      <input 
+                          type="url" 
+                          placeholder="或貼上圖片連結" 
+                          value={newInventoryForm.image || ''} 
+                          onChange={e => setNewInventoryForm({...newInventoryForm, image: e.target.value})}
+                          className="w-full bg-transparent border-none outline-none text-xs text-stone-700 font-bold placeholder-stone-300 truncate"
+                      />
+                  </div>
               </div>
             </div>
 
@@ -522,6 +574,16 @@ export default function InventoryManager({ inventory, setInventory, projects, se
             {/* 🧶 3. 毛線表單排版細節 (Yarn Form Flow) */}
             {isYarn ? (
               <div className="space-y-8">
+                {/* 掃描條碼按鍵 */}
+                <button 
+                  onClick={handleScanBarcode} 
+                  disabled={isScanningBarcode}
+                  className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-black tracking-widest uppercase text-xs transition-all ${isScanningBarcode ? 'bg-stone-100 text-stone-400' : 'bg-[#926c44]/10 text-[#926c44] border border-[#926c44]/20 hover:bg-[#926c44]/20 active:scale-95'}`}
+                >
+                  <ScanFace size={16} className={isScanningBarcode ? "animate-pulse" : ""} />
+                  {isScanningBarcode ? '掃描辨識中...' : '掃描商品條碼帶入資訊 (測試中)'}
+                </button>
+
                 {/* 第一區塊：基本辨識 */}
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -659,6 +721,16 @@ export default function InventoryManager({ inventory, setInventory, projects, se
 
               /* 🛠️ 4. 工具表單排版細節 (Tool Form Flow) */
               <div className="space-y-8">
+                {/* 掃描條碼按鍵 */}
+                <button 
+                  onClick={handleScanBarcode} 
+                  disabled={isScanningBarcode}
+                  className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-black tracking-widest uppercase text-xs transition-all ${isScanningBarcode ? 'bg-stone-100 text-stone-400' : 'bg-[#926c44]/10 text-[#926c44] border border-[#926c44]/20 hover:bg-[#926c44]/20 active:scale-95'}`}
+                >
+                  <ScanFace size={16} className={isScanningBarcode ? "animate-pulse" : ""} />
+                  {isScanningBarcode ? '掃描辨識中...' : '掃描商品條碼帶入資訊 (測試中)'}
+                </button>
+
                 {/* 共通工具名稱 */}
                 <div>
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-2 flex items-center gap-1.5"><Tag size={12}/> 工具名稱 (Name)</label>
@@ -859,6 +931,13 @@ export default function InventoryManager({ inventory, setInventory, projects, se
                 </div>
             </div>
         </div>
+      )}
+
+      {isBarcodeScannerOpen && (
+          <BarcodeScanner 
+              onScan={handleBarcodeScanned} 
+              onClose={() => setIsBarcodeScannerOpen(false)} 
+          />
       )}
     </>
   );
